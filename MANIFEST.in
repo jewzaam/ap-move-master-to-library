@@ -1,0 +1,4 @@
+include LICENSE
+include README.md
+recursive-include ap_move_calibration *.py
+recursive-include tests *.py
