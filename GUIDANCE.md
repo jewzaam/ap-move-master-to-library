@@ -11,7 +11,7 @@ Unlike the original `copycalibration.py` which required separate source/destinat
 ## Usage
 
 ```powershell
-python -m ap_move_calibration.move_calibration <source_dir> <dest_dir> [--debug] [--dryrun] [--overwrite] [--help]
+python -m ap_move_calibration.move_calibration <source_dir> <dest_dir> [--debug] [--dryrun] [--no-overwrite] [--help]
 ```
 
 Options:
@@ -19,7 +19,7 @@ Options:
 - `dest_dir`: Destination directory for organized calibration library
 - `--debug`: Enable debug output
 - `--dryrun`: Perform dry run without actually copying files
-- `--overwrite`: Overwrite existing files in destination (default: skip existing files)
+- `--no-overwrite`: Fail if destination files already exist (default: overwrite existing files)
 - `--help`: Show help message and exit
 
 ## Installation
@@ -53,7 +53,7 @@ make uninstall
 3. Organizes files by frame type into `dest_dir/{BIAS,DARK,FLAT}/`
 4. Within each type directory, organizes by optical configuration (camera, optic, filter)
 5. Reports files copied and any errors encountered
-6. Skips existing files unless `--overwrite` is specified
+6. Overwrites existing files by default (use `--no-overwrite` to fail on collisions)
 
 ## Directory Structure
 
@@ -157,11 +157,11 @@ python -m ap_move_calibration.move_calibration `
     "D:\Dropbox\Astrophotography\Data\_Calibration_Library" `
     --dryrun
 
-# Overwrite existing files
+# Fail if destination files already exist (check for collisions)
 python -m ap_move_calibration.move_calibration `
     "D:\WBPP\_calibration\master" `
     "D:\Dropbox\Astrophotography\Data\_Calibration_Library" `
-    --overwrite
+    --no-overwrite
 ```
 
 ## Dependencies

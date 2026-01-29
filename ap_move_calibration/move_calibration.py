@@ -7,6 +7,304 @@ master calibration frames by type and optical configuration.
 """
 
 import argparse
+import logging
+import os
+import sys
+
+from ap_common.filesystem import copy_file
+from ap_common.metadata import get_filtered_metadata
+from ap_common.normalization import denormalize_header
+from ap_common.utils import camelCase, replace_env_vars
+
+from . import config
+
+# Configure logging
+logger = logging.getLogger(__name__)
+
+
+def _build_filename(datum: dict, frame_type: str, file_extension: str) -> str:
+    """
+    Builds a filename from metadata properties.
+
+    Args:
+        datum: Metadata dictionary
+        frame_type: Type of calibration frame (BIAS, DARK, FLAT)
+        file_extension: File extension to append
+
+    Returns:
+        Filename string
+    """
+    output_filename = f"{camelCase(datum['type'])}"
+
+    # Add metadata to filename
+    for key in config.FILENAME_PROPERTIES[frame_type]:
+        if key in datum and datum[key] is not None:
+            p = denormalize_header(key)
+            if p is None:
+                p = str(key).upper()
+            output_filename += f"_{p}_{datum[key]}"
+
+    output_filename += file_extension
+    return output_filename
+
+
+def _build_bias_path(datum: dict, dest_dir: str, filename: str) -> str:
+    """
+    Builds destination path for BIAS frames.
+
+    Args:
+        datum: Metadata dictionary
+        dest_dir: Destination base directory
+        filename: Filename to use
+
+    Returns:
+        Full destination path
+    """
+    return os.path.join(dest_dir, "BIAS", datum[config.KEYWORD_CAMERA], filename)
+
+
+def _build_dark_path(datum: dict, dest_dir: str, filename: str) -> str:
+    """
+    Builds destination path for DARK frames.
+
+    Args:
+        datum: Metadata dictionary
+        dest_dir: Destination base directory
+        filename: Filename to use
+
+    Returns:
+        Full destination path
+    """
+    return os.path.join(dest_dir, "DARK", datum[config.KEYWORD_CAMERA], filename)
+
+
+def _build_flat_path(datum: dict, dest_dir: str, filename: str) -> str:
+    """
+    Builds destination path for FLAT frames.
+
+    Args:
+        datum: Metadata dictionary
+        dest_dir: Destination base directory
+        filename: Filename to use
+
+    Returns:
+        Full destination path
+    """
+    date_subdir = f"DATE_{datum[config.KEYWORD_DATE]}"
+
+    dest_path_parts = [dest_dir, "FLAT", datum[config.KEYWORD_CAMERA]]
+    if (
+        config.KEYWORD_OPTIC in datum
+        and datum[config.KEYWORD_OPTIC] is not None
+        and len(datum[config.KEYWORD_OPTIC]) > 0
+    ):
+        dest_path_parts.append(datum[config.KEYWORD_OPTIC])
+    dest_path_parts.append(date_subdir)
+    dest_path_parts.append(filename)
+
+    return os.path.join(*dest_path_parts)
+
+
+def build_destination_path(
+    source_file: str, dest_dir: str, datum: dict, frame_type: str, debug: bool = False
+) -> str:
+    """
+    Builds the destination path for a calibration frame based on its type and metadata.
+
+    Args:
+        source_file: Source file path
+        dest_dir: Destination base directory
+        datum: Metadata dictionary for the file
+        frame_type: Type of calibration frame (BIAS, DARK, FLAT)
+        debug: Print debug information
+
+    Returns:
+        Full destination path for the file
+
+    Raises:
+        ValueError: If required metadata is missing for the given frame type
+    """
+    # Validate frame type
+    if frame_type not in ["BIAS", "DARK", "FLAT"]:
+        raise ValueError(f"Unknown frame type: {frame_type}")
+
+    # Get file extension
+    file_extension = os.path.splitext(source_file)[1]
+
+    # Validate required metadata
+    required_props = config.REQUIRED_PROPERTIES.get(frame_type, [])
+    for prop in required_props:
+        if prop not in datum or datum[prop] is None:
+            raise ValueError(f"Missing required '{prop}' metadata for {source_file}")
+
+    # Build filename
+    filename = _build_filename(datum, frame_type, file_extension)
+
+    # Build path based on type
+    if frame_type == "BIAS":
+        dest_path = _build_bias_path(datum, dest_dir, filename)
+    elif frame_type == "DARK":
+        dest_path = _build_dark_path(datum, dest_dir, filename)
+    elif frame_type == "FLAT":
+        dest_path = _build_flat_path(datum, dest_dir, filename)
+
+    return os.path.normpath(dest_path)
+
+
+def _check_for_collisions(copy_list: list) -> list:
+    """
+    Checks for existing destination files.
+
+    Args:
+        copy_list: List of (source_file, dest_file) tuples
+
+    Returns:
+        List of existing destination files
+    """
+    existing_files = []
+    for source_file, dest_file in copy_list:
+        if os.path.exists(dest_file):
+            existing_files.append(dest_file)
+    return existing_files
+
+
+def _print_summary(stats: dict, dryrun: bool):
+    """
+    Prints summary statistics.
+
+    Args:
+        stats: Statistics dictionary
+        dryrun: Whether this was a dry run
+    """
+    logger.info("=" * 60)
+    logger.info("SUMMARY")
+    logger.info("=" * 60)
+    for frame_type in ["BIAS", "DARK", "FLAT"]:
+        logger.info(f"{frame_type}:")
+        logger.info(f"  Scanned: {stats[frame_type]['scanned']}")
+        logger.info(f"  Copied:  {stats[frame_type]['copied']}")
+        logger.info(f"  Skipped: {stats[frame_type]['skipped']}")
+
+    total_scanned = sum(s["scanned"] for s in stats.values())
+    total_copied = sum(s["copied"] for s in stats.values())
+    total_skipped = sum(s["skipped"] for s in stats.values())
+
+    logger.info("TOTAL:")
+    logger.info(f"  Scanned: {total_scanned}")
+    logger.info(f"  Copied:  {total_copied}")
+    logger.info(f"  Skipped: {total_skipped}")
+    logger.info("=" * 60)
+
+    if dryrun:
+        logger.info("(DRY RUN - no files were actually copied)")
+
+
+def copy_calibration_frames(
+    source_dir: str,
+    dest_dir: str,
+    debug: bool = False,
+    dryrun: bool = False,
+    no_overwrite: bool = False,
+):
+    """
+    Copies and organizes master calibration frames from source to destination.
+
+    Args:
+        source_dir: Source directory containing master calibration files
+        dest_dir: Destination directory for organized library
+        debug: Enable debug output
+        dryrun: Perform dry run without copying files
+        no_overwrite: If True, fail if any destination files already exist
+
+    Raises:
+        FileExistsError: If no_overwrite is True and destination files exist
+        ValueError: If required metadata is missing
+    """
+    # Replace environment variables
+    source_dir = replace_env_vars(source_dir)
+    dest_dir = replace_env_vars(dest_dir)
+
+    # Validate directories
+    if not os.path.isdir(source_dir):
+        raise ValueError(f"Source directory does not exist: {source_dir}")
+
+    logger.info(f"Scanning source directory: {source_dir}")
+
+    # Track statistics
+    stats = {
+        "BIAS": {"scanned": 0, "copied": 0, "skipped": 0},
+        "DARK": {"scanned": 0, "copied": 0, "skipped": 0},
+        "FLAT": {"scanned": 0, "copied": 0, "skipped": 0},
+    }
+
+    # Process each calibration type
+    for frame_type in ["BIAS", "DARK", "FLAT"]:
+        filter_type = f"MASTER {frame_type}"
+
+        logger.debug(f"Scanning for {filter_type} frames...")
+
+        # Get all calibration frames of this type
+        metadata = get_filtered_metadata(
+            dirs=[source_dir],
+            patterns=[r".*\.xisf$", r".*\.fits$"],
+            recursive=True,
+            required_properties=[],
+            filters={"type": filter_type},
+            debug=debug,
+            profileFromPath=False,
+        )
+
+        stats[frame_type]["scanned"] = len(metadata)
+
+        logger.debug(f"Found {len(metadata)} {filter_type} frames")
+
+        # Build copy list with destination paths
+        copy_list = []
+        for source_file, datum in metadata.items():
+            try:
+                dest_file = build_destination_path(
+                    source_file=source_file,
+                    dest_dir=dest_dir,
+                    datum=datum,
+                    frame_type=frame_type,
+                    debug=debug,
+                )
+                copy_list.append((source_file, dest_file))
+            except ValueError as e:
+                logger.warning(f"Skipping file due to missing metadata: {e}")
+                stats[frame_type]["skipped"] += 1
+                continue
+
+        # If no_overwrite is set, check for collisions up front
+        if no_overwrite:
+            existing_files = _check_for_collisions(copy_list)
+
+            if existing_files:
+                logger.error("The following destination files already exist:")
+                for f in existing_files:
+                    logger.error(f"  {f}")
+                raise FileExistsError(
+                    f"Found {len(existing_files)} existing files. Use without --no-overwrite to overwrite them."
+                )
+
+        # Copy files
+        for source_file, dest_file in copy_list:
+            logger.debug(f"Copy {source_file} -> {dest_file}")
+
+            try:
+                copy_file(
+                    from_file=source_file,
+                    to_file=dest_file,
+                    debug=debug,
+                    dryrun=dryrun,
+                )
+                stats[frame_type]["copied"] += 1
+            except Exception as e:
+                logger.error(f"Failed to copy {source_file}: {e}")
+                stats[frame_type]["skipped"] += 1
+
+    # Print summary
+    _print_summary(stats, dryrun)
 
 
 def main():
@@ -17,21 +315,50 @@ def main():
         description="Copy and organize master calibration frames from source to destination library"
     )
 
-    parser.add_argument("source_dir", type=str, help="Source directory containing master calibration files")
-    parser.add_argument("dest_dir", type=str, help="Destination directory for organized calibration library")
+    parser.add_argument(
+        "source_dir",
+        type=str,
+        help="Source directory containing master calibration files",
+    )
+    parser.add_argument(
+        "dest_dir",
+        type=str,
+        help="Destination directory for organized calibration library",
+    )
     parser.add_argument("--debug", action="store_true", help="Enable debug output")
-    parser.add_argument("--dryrun", action="store_true", help="Perform dry run without copying files")
-    parser.add_argument("--overwrite", action="store_true", help="Overwrite existing files (default: skip existing)")
+    parser.add_argument(
+        "--dryrun",
+        action="store_true",
+        help="Perform dry run without copying files",
+    )
+    parser.add_argument(
+        "--no-overwrite",
+        action="store_true",
+        help="Fail if destination files already exist (default: overwrite existing files)",
+    )
 
     args = parser.parse_args()
 
-    # TODO: Implement calibration frame copying and organizing logic
-    print(f"Source directory: {args.source_dir}")
-    print(f"Destination directory: {args.dest_dir}")
-    print(f"Debug: {args.debug}")
-    print(f"Dry run: {args.dryrun}")
-    print(f"Overwrite: {args.overwrite}")
-    print("\nTODO: Implementation pending")
+    # Configure logging
+    log_level = logging.DEBUG if args.debug else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(levelname)s: %(message)s",
+    )
+
+    try:
+        copy_calibration_frames(
+            source_dir=args.source_dir,
+            dest_dir=args.dest_dir,
+            debug=args.debug,
+            dryrun=args.dryrun,
+            no_overwrite=args.no_overwrite,
+        )
+    except Exception as e:
+        logger.error(f"{e}")
+        if args.debug:
+            logger.exception("Full traceback:")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
