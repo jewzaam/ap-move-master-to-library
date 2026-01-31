@@ -26,26 +26,16 @@ This tool is part of the astrophotography pipeline. For comprehensive documentat
 
 ## Installation
 
-### From Source (Development)
+### Development
 
 ```bash
 make install-dev
 ```
 
-This installs the package in editable mode along with all dependencies (including `ap-common` from git) and development tools.
+### From Git
 
-### From Git Repository (One-liner)
-
-```powershell
+```bash
 pip install git+https://github.com/jewzaam/ap-move-calibration.git
-```
-
-This installs the package directly from the GitHub repository without requiring a local checkout.
-
-### Uninstallation
-
-```powershell
-make uninstall
 ```
 
 ## Usage
@@ -155,7 +145,3 @@ Lint code:
 ```powershell
 make lint
 ```
-
-## License
-
-See LICENSE file for details.
