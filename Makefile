@@ -32,7 +32,7 @@ test-verbose: install-dev
 	$(PYTHON) -m pytest -v
 
 typecheck: install-dev
-	$(PYTHON) -m mypy ap_move_master_to_library || true
+	$(PYTHON) -m mypy ap_move_master_to_library
 
 coverage: install-dev
 	$(PYTHON) -m pytest --cov=ap_move_master_to_library --cov-report=term
