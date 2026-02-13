@@ -15,13 +15,16 @@ from ap_common.filesystem import copy_file
 from ap_common.logging_config import setup_logging
 from ap_common.metadata import get_filtered_metadata
 from ap_common.normalization import denormalize_header
-from ap_common.progress import progress_iter
+from ap_common.progress import progress_iter, ProgressTracker
 from ap_common.utils import camelCase, replace_env_vars
 
 from . import config
 
 # Configure logging
 logger = logging.getLogger(__name__)
+
+# Set default description width for aligned progress bars
+ProgressTracker.set_default_desc_width(20)
 
 
 def _build_filename(datum: dict, file_extension: str) -> str:
