@@ -4,6 +4,7 @@
 [![Coverage](https://github.com/jewzaam/ap-move-master-to-library/workflows/Coverage%20Check/badge.svg)](https://github.com/jewzaam/ap-move-master-to-library/actions/workflows/coverage.yml)
 [![Lint](https://github.com/jewzaam/ap-move-master-to-library/workflows/Lint/badge.svg)](https://github.com/jewzaam/ap-move-master-to-library/actions/workflows/lint.yml)
 [![Format](https://github.com/jewzaam/ap-move-master-to-library/workflows/Format%20Check/badge.svg)](https://github.com/jewzaam/ap-move-master-to-library/actions/workflows/format.yml)
+[![Type Check](https://github.com/jewzaam/ap-move-master-to-library/workflows/Type%20Check/badge.svg)](https://github.com/jewzaam/ap-move-master-to-library/actions/workflows/typecheck.yml)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
