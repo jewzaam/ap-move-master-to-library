@@ -18,7 +18,11 @@ from ap_common.normalization import denormalize_header
 from ap_common.progress import progress_iter, ProgressTracker
 from ap_common.utils import camelCase, replace_env_vars
 
-from ap_common.constants import DEFAULT_CALIBRATION_PATTERNS, NORMALIZED_HEADER_TYPE
+from ap_common.constants import (
+    DEFAULT_CALIBRATION_PATTERNS,
+    MASTER_CALIBRATION_TYPES,
+    NORMALIZED_HEADER_TYPE,
+)
 
 from . import config
 
@@ -211,10 +215,11 @@ def _print_summary(stats: dict, dryrun: bool):
     logger.info("=" * 60)
     logger.info("SUMMARY")
     logger.info("=" * 60)
-    for frame_type in config.MASTER_CALIBRATION_TYPES:
+    for frame_type in MASTER_CALIBRATION_TYPES:
         logger.info(
             f"{frame_type}: scanned={stats[frame_type]['scanned']}, "
-            f"copied={stats[frame_type]['copied']}, skipped={stats[frame_type]['skipped']}"
+            f"copied={stats[frame_type]['copied']}, "
+            f"skipped={stats[frame_type]['skipped']}"
         )
 
     total_scanned = sum(s["scanned"] for s in stats.values())
@@ -222,7 +227,8 @@ def _print_summary(stats: dict, dryrun: bool):
     total_skipped = sum(s["skipped"] for s in stats.values())
 
     logger.info(
-        f"TOTAL: scanned={total_scanned}, copied={total_copied}, skipped={total_skipped}"
+        f"TOTAL: scanned={total_scanned}, copied={total_copied}, "
+        f"skipped={total_skipped}"
     )
     logger.info("=" * 60)
 
@@ -233,6 +239,7 @@ def _print_summary(stats: dict, dryrun: bool):
 def copy_calibration_frames(
     source_dir: str,
     dest_dir: str,
+    *,
     debug: bool = False,
     dryrun: bool = False,
     no_overwrite: bool = False,
@@ -271,7 +278,7 @@ def copy_calibration_frames(
     }
 
     # Process each calibration type
-    for frame_type in config.MASTER_CALIBRATION_TYPES:
+    for frame_type in MASTER_CALIBRATION_TYPES:
         logger.debug(f"Scanning for {frame_type} frames...")
 
         # Get all calibration frames of this type
@@ -314,7 +321,8 @@ def copy_calibration_frames(
                 for f in existing_files:
                     logger.error(f"  {f}")
                 raise FileExistsError(
-                    f"Found {len(existing_files)} existing files. Use without --no-overwrite to overwrite them."
+                    f"Found {len(existing_files)} existing files. "
+                    "Use without --no-overwrite to overwrite them."
                 )
 
         # Copy files
@@ -344,7 +352,10 @@ def main():
     Main entry point for the ap-move-calibration CLI tool.
     """
     parser = argparse.ArgumentParser(
-        description="Copy and organize master calibration frames from source to destination library"
+        description=(
+            "Copy and organize master calibration frames "
+            "from source to destination library"
+        )
     )
 
     parser.add_argument(
@@ -366,7 +377,10 @@ def main():
     parser.add_argument(
         "--no-overwrite",
         action="store_true",
-        help="Fail if destination files already exist (default: overwrite existing files)",
+        help=(
+            "Fail if destination files already exist "
+            "(default: overwrite existing files)"
+        ),
     )
     parser.add_argument(
         "-q",

@@ -174,7 +174,7 @@ python -m ap_move_calibration.move_calibration `
 
 Run tests:
 ```powershell
-make test
+make test-unit
 ```
 
 Run with coverage:
@@ -189,5 +189,5 @@ make format
 
 Lint code:
 ```powershell
-make lint
+make test-lint
 ```

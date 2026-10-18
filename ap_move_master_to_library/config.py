@@ -9,7 +9,6 @@ Uses normalized keyword names from ap-common normalization.
 
 # Import constants from ap-common
 from ap_common.constants import (
-    NORMALIZED_HEADER_TYPE,
     NORMALIZED_HEADER_CAMERA,
     NORMALIZED_HEADER_GAIN,
     NORMALIZED_HEADER_OFFSET,
@@ -23,7 +22,6 @@ from ap_common.constants import (
     TYPE_MASTER_BIAS,
     TYPE_MASTER_DARK,
     TYPE_MASTER_FLAT,
-    MASTER_CALIBRATION_TYPES,
 )
 
 # Required metadata properties for each frame type
