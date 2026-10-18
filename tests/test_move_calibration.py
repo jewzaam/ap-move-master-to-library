@@ -6,7 +6,7 @@ Tests for the move_calibration module.
 import os
 import pytest
 import tempfile
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 from ap_move_master_to_library.move_calibration import (
     build_destination_path,
@@ -68,7 +68,7 @@ def test_build_destination_path_dark():
     assert "MASTER DARK" in dest_path
     assert "DWARFIII" in dest_path
     assert "masterDark" in dest_path
-    # Check for exposure time in filename (denormalize_header may return different values)
+    # Exposure time in filename (denormalize_header may return different values)
     assert "_300_" in dest_path  # Exposure value should be in filename
     assert "GAIN_100" in dest_path
     assert ".fits" in dest_path
